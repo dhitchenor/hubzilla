@@ -1,7 +1,7 @@
 FROM alpine:3.19.1 as build
 
 ARG HZ_REPO=https://framagit.org/hubzilla/core
-ARG HZ_VERSION=8.8.8
+ARG HZ_VERSION=9.0
 
 RUN apk add bash \
   curl \
@@ -9,15 +9,19 @@ RUN apk add bash \
   git \
   patch \
   php82 \
+  php82-bcmath \
+  php82-common \
   php82-curl \
   php82-gd \
-  php82-openssl \
-  php82-xml \
-  php82-pecl-imagick \
-  php82-pgsql \
-  php82-mysqli \
+  php82-iconv \
+  php82-intl \
   php82-mbstring \
+  php82-mysqli \
+  php82-openssl \
+  php82-pecl-imagick \
   php82-pecl-mcrypt \
+  php82-pgsql \
+  php82-xml \
   php82-zip \
  && git clone $HZ_REPO /hubzilla
 
@@ -25,9 +29,8 @@ WORKDIR /hubzilla
 
 COPY entrypoint.sh /hubzilla
 
-RUN echo $HZ_VERSION > /hubzilla/VERSION \
- && chmod +x /hubzilla/entrypoint.sh \
- && git checkout tags/$(cat /hubzilla/VERSION) \
+RUN chmod +x /hubzilla/entrypoint.sh \
+ && git checkout tags/$HZ_VERSION \
  && rm -rf .git \
  && mkdir -p "addon" \
  && mkdir -p "extend" \
@@ -47,16 +50,21 @@ FROM php:8.2-fpm-alpine3.19
 RUN apk --update --no-cache --no-progress add \
   bash \
   git \
+  icu-libs \
   imagemagick \
   jpeg \
   libavif \
+  libgcc \
   libgd \
   libjpeg-turbo \
   libmcrypt \
   libpng \
+  libsodium \
+  libstdc++ \
   libwebp \
   libzip \
   mysql-client \
+  musl \
   oniguruma \
   openldap-clients \
   postgresql-client \
@@ -78,6 +86,7 @@ RUN apk --update --no-cache --no-progress add \
   libldap \
   libmcrypt-dev \
   libpng-dev \
+  libsodium-dev \
   libtool \
   libwebp-dev \
   libxml2-dev \
@@ -91,8 +100,10 @@ RUN apk --update --no-cache --no-progress add \
  && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp --with-avif \
  ### Make sure they're are NO 'configure' commands after this command. Ref: https://github.com/docker-library/php/issues/926 ###
  && docker-php-ext-install \
+  bcmath \
   curl \
   gd \
+  intl \
   ldap \
   mbstring \
   mysqli \
@@ -101,12 +112,14 @@ RUN apk --update --no-cache --no-progress add \
   pdo_mysql \
   pdo_pgsql \
   pgsql \
+  sodium \
   xml \
   zip \
- && pecl install -o -f redis \
- && docker-php-ext-enable redis.so \
+ && docker-php-ext-enable intl.so \
  && pecl install imagick \
  && docker-php-ext-enable imagick \
+ && pecl install -o -f redis \
+ && docker-php-ext-enable redis.so \
  && pecl install xhprof \
  && docker-php-ext-enable xhprof.so \
  && echo 'xhprof.output_dir = "/var/www/html/xhprof"'|tee -a /usr/local/etc/php/conf.d/docker-php-ext-xhprof.ini \

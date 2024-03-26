@@ -55,7 +55,7 @@ services:
 
   hub:
     container_name: hubzilla_itself      # ARBITARY (user can change)
-    image: dhitchenor/hubzilla:8.8.8
+    image: dhitchenor/hubzilla:9.0
     restart: unless-stopped
     depends_on:
       - hub_db
@@ -69,7 +69,7 @@ services:
 
   hub_cron:
     container_name: hubzilla_cronjob      # ARBITARY (user can change)
-    image: dhitchenor/hubzilla:8.8.8
+    image: dhitchenor/hubzilla:9.0
     restart: unless-stopped
     depends_on:
       - hub_db
