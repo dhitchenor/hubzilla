@@ -1,0 +1,78 @@
+version: '3.5'
+
+networks:
+  public:
+      external: true
+  hubzilla:
+
+services:
+  hub_db:
+    container_name: hubzilla_database       # ARBITARY (user can change)
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD_SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    #healthcheck:
+    #  test: ["/usr/bin/mysql --user=root --password=rootpasswd --execute \"SHOW DATABASES;\""]
+    #  interval: 10s
+    #  timeout: 5s
+    #  retries: 5
+    networks:
+      - hubzilla
+    volumes:
+      - <YOUR_DB_FOLDER/LOCATION>:/var/lib/postgresql/data
+
+  hub_web:
+    container_name: hubzilla_webserver      # ARBITARY (user can change)
+    image: nginx:1.25.3-alpine
+    restart: unless-stopped
+    depends_on:
+      - hub
+      - hub_cron
+    env_file:
+      - .env
+    volumes:
+      - <NGINX_CONF_LOCATION>:/etc/nginx/nginx.conf:ro
+      - <DESIRED_WEB_ROOT_LOCATION>:/var/www/html
+    networks:
+      - public
+    labels:                           # Traefik rules: may not be applicable to you
+      - traefik.enable=true
+      - traefik.http.routers.hub_web.rule=Host(`domain.com`)
+      - traefik.http.routers.hub_web.tls=true
+      - traefik.http.routers.hub_web.tls.certresolver=le
+      - traefik.http.routers.hub_web.entrypoints=websecure
+      - traefik.http.services.hub_web.loadbalancer.server.port=80
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+      - traefik.http.routers.redirect.rule=Host(`domain.com`)
+      - traefik.http.routers.redirect.middlewares=redirect-to-https
+      - traefik.http.routers.redirect.entrypoints=web
+
+  hub:
+    container_name: hubzilla_itself      # ARBITARY (user can change)
+    image: dhitchenor/hubzilla:8.8.7
+    restart: unless-stopped
+    depends_on:
+      - hub_db
+    env_file:
+      - .env
+    networks:
+      - public
+      - hubzilla
+    volumes:
+      - <DESIRED_WEB_ROOT_LOCATION>:/var/www/html
+
+  hub_cron:
+    container_name: hubzilla_cronjob      # ARBITARY (user can change)
+    image: dhitchenor/hubzilla:8.8.7
+    restart: unless-stopped
+    depends_on:
+      - hub_db
+    networks:
+      - hubzilla
+    command: ["crond", "-f"]
