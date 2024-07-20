@@ -1,0 +1,81 @@
+version: '3.5'
+
+networks:
+  public:
+      external: true
+  hubzilla:
+
+services:
+  hub_db:
+    container_name: hubzilla_database       # ARBITARY (user can/should change)
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    #healthcheck:
+    #  test: ["/usr/bin/mysql --user=${DB_USER} --password=${DB_PASSWORD} --execute \"SHOW DATABASES;\""]
+    #  interval: 10s
+    #  timeout: 5s
+    #  retries: 5
+    networks:
+      - hubzilla
+    volumes:
+        - "${LOC_DB}:/var/lib/postgresql/data"
+
+  hub_web:
+    container_name: hubzilla_webserver      # ARBITARY (user can/should change)
+    image: nginx:1.25.3-alpine
+    restart: unless-stopped
+    depends_on:
+      - hub
+      - hub_cron
+    env_file:
+      - .env
+    volumes:
+      - "${LOC_NGINXCONF}:/etc/nginx/nginx.conf:ro"
+      - web_root:/var/www/html:Z            # Retain the capital Z (SELinux permission issues)
+    networks:
+      - public
+    labels:                                 # Traefik rules: may NOT work/ be applicable to everyone
+      - traefik.enable=true
+      - traefik.http.routers.hub_web.rule=Host(`domain.com`)
+      - traefik.http.routers.hub_web.tls=true
+      - traefik.http.routers.hub_web.tls.certresolver=le
+      - traefik.http.routers.hub_web.entrypoints=websecure
+      - traefik.http.services.hub_web.loadbalancer.server.port=80
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+      - traefik.http.routers.redirect.rule=Host(`domain.com`)
+      - traefik.http.routers.redirect.middlewares=redirect-to-https
+      - traefik.http.routers.redirect.entrypoints=web
+
+  hub:
+    container_name: hubzilla_itself         # ARBITARY (user can/should change)
+    image: "dhitchenor/hubzilla:${VER_FULL}"
+    restart: unless-stopped
+    depends_on:
+      - hub_db
+    env_file:
+      - .env
+    networks:
+      - public
+      - hubzilla
+    volumes:
+      - web_root:/var/www/html:Z            # Retain the capital Z (SELinux permission issues)
+
+  hub_cron:
+    container_name: hubzilla_cronjob        # ARBITARY (user can/should change)
+    image: "dhitchenor/hubzilla:${VER_FULL}"
+    restart: unless-stopped
+    depends_on:
+      - hub_db
+    networks:
+      - hubzilla
+    command: ["crond", "-f"]
+
+volumes:
+  web_root:
